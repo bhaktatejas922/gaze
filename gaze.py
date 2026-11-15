@@ -10,7 +10,7 @@ not a black-box regression, and includes head-movement passes so depth is actual
   python gaze.py --recalibrate   force a new calibration
   python gaze.py --units gpu     run the models on the GPU instead (faster when the GPU is idle, slower when it is not)
   python gaze.py --bench         headless timing, no window
-  python gaze.py --serve         no window: answer "where are they looking?" on a local socket, for other tools
+  python gaze.py --serve         no window: answer "where are they looking?" on a local socket (what micbtn asks)
   python gaze.py --serve --glow  the same, following the eyes all the time, with a small dot in the corner of the iTerm pane looked at
   python gaze.py --point         ask the running --serve daemon once and print its answer
   python gaze.py --demo 14       a target to follow with your eyes, the gaze dot chasing it (--record clip.mov)
@@ -392,8 +392,8 @@ class Glow:
     own, so iTerm is not touched. (It was a ring around the whole pane; that was too much to look at all day.)
 
     The panes come from Accessibility (each session is an AXTextArea inside an AXScrollArea), which is the
-    only place iTerm says where a pane is on screen. The app the daemon runs under (your terminal) needs
-    Accessibility for that.
+    only place iTerm says where a pane is on screen. The daemon runs as MicBtn's child, so MicBtn's
+    Accessibility grant covers it.
     """
     M, D, INSET = 8, 7, 9  # room around the dot for its glow, its diameter, and how far in from the pane's corner
 
@@ -421,7 +421,7 @@ class Glow:
         self.since, self.count = 0.0, 0
         self.cache = {}  # pid -> (when, panes)
         if not AS.AXIsProcessTrusted():
-            print("glow: no Accessibility, so iTerm's panes cannot be read: turn on your terminal under Privacy & Security > Accessibility", flush=True)
+            print("glow: no Accessibility, so iTerm's panes cannot be read: turn on MicBtn under Privacy & Security > Accessibility", flush=True)
 
     def _ax(self, el, attr):
         err, v = self.AS.AXUIElementCopyAttributeValue(el, attr, None)
@@ -511,7 +511,7 @@ def serve(cam, gaze, a):
     tr = Tracker(); tr.refresh()
     if tr.mapper is None:
         print("not calibrated (or no laptop screen): run  gaze  once; trying again in 30 s", flush=True)
-        time.sleep(30)  # whatever started it tries again; no socket means nobody is answered
+        time.sleep(30)  # launchd restarts it; no socket means micbtn skips the click
         return
     try:
         cam.latest(0, timeout=10)

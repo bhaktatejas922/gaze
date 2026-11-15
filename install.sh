@@ -1,16 +1,26 @@
 #!/bin/bash
 # gaze: webcam eye tracking for Apple silicon Macs (see README.md).
-#   ./install.sh              python environment, the Core ML models and the `gaze` command
-#   ./install.sh --uninstall  remove the environment, the models and the command (calibration is kept)
+#   ./install.sh                   python environment, the Core ML models and the `gaze` command
+#   ./install.sh --daemon [--glow] the same, plus `gaze --serve` at login, run by MicBtn (micbtn/), which asks it
+#                                  where you are looking; --glow puts a dot on the iTerm pane you look at
+#                                  (anything after --daemon is passed to `gaze --serve`)
+#   ./install.sh --uninstall       remove the daemon, the environment, the models and the command (calibration is kept)
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 STATE="$HOME/Library/Application Support/gaze"
 PY="$STATE/venv/bin/python"
 CMD="$HOME/.local/bin/gaze"
+LABEL="io.github.bhaktatejas922.gaze"
+DOMAIN="gui/$(id -u)"
+PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
+LOG="$HOME/Library/Logs/gaze.log"
+
+launchctl bootout "$DOMAIN/$LABEL" 2>/dev/null || true
+while launchctl print "$DOMAIN/$LABEL" >/dev/null 2>&1; do sleep 0.2; done
 
 if [[ "${1:-}" == "--uninstall" ]]; then
-  rm -rf "$STATE/venv" "$STATE/gaze.sock" "$STATE"/*.mlmodelc "$CMD"
+  rm -rf "$PLIST" "$STATE/venv" "$STATE/gaze.sock" "$STATE"/*.mlmodelc "$CMD"
   echo "gaze removed (calibration kept in $STATE)"
   exit 0
 fi
@@ -38,3 +48,36 @@ printf '#!/bin/sh\nexec "%s" "%s" "$@"\n' "$PY" "$HERE/gaze.py" > "$CMD"
 chmod +x "$CMD"
 echo "installed: run  gaze  to calibrate"
 case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) echo "note: $HOME/.local/bin is not on your PATH" ;; esac
+
+[[ "${1:-}" == "--daemon" ]] || exit 0
+[[ -s "$STATE/calib.npz" ]] || { echo "not calibrated yet: run  gaze  first, then  ./install.sh --daemon" >&2; exit 1; }
+# macOS gives the camera to an app, not to a bare python under launchd: MicBtn asks for it and runs the daemon.
+MICBTN="$HOME/Applications/MicBtn.app/Contents/MacOS/micbtn"
+[[ -x "$MICBTN" ]] || { echo "MicBtn is not installed: run  ./micbtn/install.sh  first (see micbtn/README.md)" >&2; exit 1; }
+mkdir -p "$(dirname "$PLIST")" "$(dirname "$LOG")"
+cat > "$PLIST" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>$LABEL</string>
+  <key>ProgramArguments</key><array>
+    <string>$MICBTN</string>
+    <string>--gaze-serve</string>
+    <string>$CMD --serve ${*:2}</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>10</integer>
+  <key>StandardOutPath</key><string>$LOG</string>
+  <key>StandardErrorPath</key><string>$LOG</string>
+</dict></plist>
+PLIST
+: > "$LOG"
+launchctl bootstrap "$DOMAIN" "$PLIST"
+echo "starting the daemon (log: $LOG); allow the Camera prompt for MicBtn if macOS shows one"
+for _ in $(seq 120); do
+  grep -q "serving on" "$LOG" && break
+  sleep 0.5
+done
+grep -q "serving on" "$LOG" || { echo "the daemon is not serving yet: see $LOG" >&2; exit 1; }
+echo "the daemon is running. Right now it says: $("$CMD" --point 2>/dev/null | tail -1)"

@@ -1,31 +1,51 @@
 # gaze
 
-Webcam eye tracking for the Mac. It works out where on your screens you are looking from the built-in
-camera, on the laptop display and one external monitor, and runs on the Neural Engine.
+Mind computer interfacing for multi agent coordination: look at an agent's pane, click the mic button,
+talk. The words go to the agent you were looking at. No mouse, no keyboard, no window switching.
+
+![iTerm panes following the eyes, and a DJI Mic Mini click dictating into the one looked at](demo-panes.gif)
+
+A small blue dot sits in the corner of the iTerm pane you are looking at. One click of the DJI Mic Mini
+starts dictation into that pane; the next click sends it. (Rendered illustration of the flow; the faint
+ring marks where the eyes are and is drawn for the clip only. [mp4](demo-panes.mp4))
+
+Two parts:
+
+- **gaze** (this directory): webcam eye tracking for the Mac. Where on your screens you are looking, from
+  the built-in camera, on the laptop display and one external monitor, run on the Neural Engine. Expect
+  one to two centimetres of error: enough to pick a pane or a window, not a word.
+- **[micbtn](micbtn/)**: turns the **DJI Mic Mini**'s button into dictation. One click asks gaze where you
+  are looking, clicks there and starts hands-free dictation; the next click ends it and presses Enter once
+  the text has landed. **A DJI Mic Mini is required** for this part: its receiver reports the transmitter's
+  button over USB, which is what micbtn reads. (micbtn also turns an analog push-to-talk mic's button into
+  a held key; see its README.)
+
+## Install
+
+Apple silicon, macOS 15 or later, [uv](https://docs.astral.sh/uv/), Xcode command line tools, a DJI Mic
+Mini with its receiver plugged in, and a dictation app that starts hands-free on a double Fn press
+(Granola by default; `--dictation-app` names another).
+
+```bash
+git clone https://github.com/bhaktatejas922/gaze && cd gaze
+./install.sh                 # gaze: python environment, Core ML models (~3 GB download, a few minutes, once)
+gaze                         # calibrate, then a live gaze dot on every screen
+./micbtn/install.sh --triple-click "$PWD/micbtn/claude-split.sh claude-opus-5-5"   # the mic button
+./install.sh --daemon --glow # gaze at login, run by MicBtn; the dot on the iTerm pane you look at
+```
+
+Allow Microphone, Accessibility, Input Monitoring and Camera for MicBtn as the installers ask. Then look at
+a pane and click. Three clicks open a new pane with Claude Code in it (`claude-split.sh`); drop
+`--triple-click` for dictation only. `micbtn --gaze` prints where gaze thinks you are looking. Without the
+gaze daemon, micbtn dictates into whatever has focus, as a plain button.
+
+## Accuracy
 
 ![demo](demo.gif)
 
 The white ring is where the eyes are; the green dot is the webcam's estimate. This clip is a simulation
 drawn at the accuracy measured on my desk (1.2 cm median with the head moving), not a screen recording;
 `gaze --demo 14 --record clip.mov` records the real thing on your own Mac. ([mp4](demo.mp4))
-
-Expect one to two centimetres of error. That is enough to pick a window, a pane or a paragraph, not a word.
-
-## What it is for
-
-I use it so that dictation goes into whatever I am looking at: a button press asks the daemon where my eyes
-are, clicks there, and starts the mic. With a wall of terminal panes, a small dot in the corner of the pane
-I am looking at shows where the text will land before I talk.
-
-## Install
-
-Apple silicon, macOS 15 or later, [uv](https://docs.astral.sh/uv/).
-
-```bash
-git clone https://github.com/bhaktatejas922/gaze && cd gaze
-./install.sh      # python environment, converts the models to Core ML (~3 GB download, a few minutes, once)
-gaze              # calibrate, then a live gaze dot on every screen
-```
 
 ## Calibrate
 
@@ -69,9 +89,10 @@ It keeps the camera open (the green light stays on) and uses about 500 MB. It ba
 second when nobody is in front of the camera, stops while the display sleeps, and picks up a recalibration
 or a monitor being plugged in without a restart.
 
-Run it from a terminal: macOS gives the camera to an app, so a bare python under launchd is refused, while
-one started from your terminal uses the terminal's Camera permission. `--glow` also needs Accessibility for
-the terminal, which is how it reads where iTerm's panes are.
+`./install.sh --daemon` runs it at login through MicBtn (`micbtn --gaze-serve`), because macOS gives the
+camera to an app and refuses a bare python under launchd. Started by hand from a terminal it uses the
+terminal's Camera permission instead. `--glow` reads where iTerm's panes are through Accessibility, which
+MicBtn (or the terminal) needs.
 
 ## How it works
 
@@ -122,9 +143,11 @@ Every operation of both lands on the Neural Engine. Measured on an M5 Pro, one f
 - Tested on one machine (M5 Pro, macOS 26). Glasses, low light and a face far off to the side all cost
   accuracy.
 - `--glow` knows iTerm2 only.
+- micbtn's button support is the DJI Mic Mini's receiver (USB vendor 0x2ca3). Other HID buttons need a
+  line in `micbtn/Support.swift`.
 
 ## Licences
 
-The code here is MIT. The UniGaze weights it downloads are
+The code here, gaze and micbtn, is MIT. The UniGaze weights it downloads are
 [non-commercial](https://github.com/ut-vision/UniGaze#license) (ModelGo MG-NC-RAI-2.0), and
 `face_model.txt` comes from the UniGaze repo, so check those terms before building a product on this.
