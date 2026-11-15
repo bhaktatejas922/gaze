@@ -3,7 +3,11 @@
 Webcam eye tracking for the Mac. It works out where on your screens you are looking from the built-in
 camera, on the laptop display and one external monitor, and runs on the Neural Engine.
 
-<!-- demo -->
+![demo](demo.gif)
+
+The white ring is where the eyes are; the green dot is the webcam's estimate. This clip is a simulation
+drawn at the accuracy measured on my desk (1.2 cm median with the head moving), not a screen recording;
+`gaze --demo 14 --record clip.mov` records the real thing on your own Mac. ([mp4](demo.mp4))
 
 Expect one to two centimetres of error. That is enough to pick a window, a pane or a paragraph, not a word.
 
